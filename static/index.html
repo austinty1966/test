@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flash &amp; Audio Extractor</title>
+<style>
+  :root { --bg:#111317; --panel:#1a1d23; --line:#2b2f37; --text:#e6e6e6; --muted:#8b919c; --accent:#4da3ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  main { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 18px; margin: 0 0 16px; font-weight: 600; }
+  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .controls { display:flex; gap:16px; flex-wrap:wrap; align-items:stretch; }
+  #drop { flex:1 1 360px; border:2px dashed var(--line); border-radius:10px; padding:28px; text-align:center;
+          cursor:pointer; background:var(--panel); color:var(--muted); transition:border-color .15s; }
+  #drop.over, #drop:hover { border-color: var(--accent); }
+  #drop b { color: var(--text); }
+  .side { display:flex; flex-direction:column; gap:12px; justify-content:center; min-width:240px; }
+  .sens { display:flex; flex-direction:column; gap:4px; }
+  .sens-labels { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; }
+  input[type=range] { width:100%; accent-color: var(--accent); }
+  button { background:var(--accent); color:#06121f; border:0; border-radius:8px; padding:12px 18px; font-weight:600; font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.4; cursor:default; }
+  #status { margin:16px 0; color:var(--muted); min-height:20px; }
+  .bar { height:4px; background:var(--line); border-radius:2px; overflow:hidden; margin-top:6px; }
+  .bar > div { height:100%; width:0; background:var(--accent); transition:width .3s; }
+  .results { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  @media (max-width: 1000px) { .results { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; min-width:0; }
+  .count { color:var(--muted); font-weight:400; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap:10px; }
+  .card { background:#0d0f12; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .card img { width:100%; display:block; cursor:zoom-in; background:#000; aspect-ratio:16/9; object-fit:contain; }
+  .meta { padding:6px 8px; font-size:12px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .meta .ts { color:var(--text); font-weight:600; }
+  .meta .sub { color:var(--muted); }
+  .alist { display:flex; flex-direction:column; gap:12px; }
+  .aitem { background:#0d0f12; border:1px solid var(--line); border-radius:6px; padding:10px; }
+  .aitem .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; }
+  .aitem audio { width:100%; height:32px; margin-top:6px; }
+  .aitem img { width:100%; display:block; margin-top:8px; border-radius:4px; cursor:zoom-in; }
+  .tag { font-size:11px; border:1px solid var(--line); border-radius:4px; padding:1px 6px; color:var(--muted); }
+  .lbl { font-size:11px; color:var(--muted); margin-top:6px; }
+  .full { margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+  .full audio { width:100%; height:32px; }
+  .empty { color:var(--muted); }
+  #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.92); display:none; align-items:center; justify-content:center; z-index:10; cursor:zoom-out; padding:16px; }
+  #lightbox.on { display:flex; flex-direction:column; gap:8px; }
+  #lightbox img { max-width:100%; max-height:90vh; }
+  #lightbox .cap { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:13px; color:#ccc; }
+  .hidden { display:none; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Flash &amp; Audio Extractor</h1>
+
+  <div class="controls">
+    <label id="drop">
+      <input id="file" type="file" accept=".mp4,.mov,.mkv,.webm,video/*" hidden>
+      <div><b>Drop a video file here</b> or click to choose</div>
+      <div style="margin-top:6px;font-size:12px">.mp4 · .mov · .mkv · .webm</div>
+      <div id="fname" style="margin-top:10px;color:var(--text)"></div>
+    </label>
+    <div class="side">
+      <div class="sens">
+        <div style="display:flex;justify-content:space-between"><span>Sensitivity</span><b id="sensName">Medium</b></div>
+        <input id="sens" type="range" min="0" max="2" step="1" value="1">
+        <div class="sens-labels"><span>Low</span><span>Medium</span><span>High</span></div>
+      </div>
+      <button id="scan" disabled>Scan Video</button>
+    </div>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="results hidden" id="results">
+    <section>
+      <h2>Extracted Images <span class="count" id="imgCount"></span></h2>
+      <div class="grid" id="frames"></div>
+    </section>
+    <section>
+      <h2>Extracted Audio <span class="count" id="audCount"></span></h2>
+      <div id="fullAudio"></div>
+      <div class="alist" id="audio"></div>
+    </section>
+  </div>
+</main>
+
+<div id="lightbox"><img alt=""><div class="cap"></div></div>
+
+<script>
+const SENS = ["low", "medium", "high"];
+const $ = id => document.getElementById(id);
+let file = null;
+
+const drop = $("drop"), input = $("file");
+["dragenter","dragover"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", ev => { if (ev.dataTransfer.files.length) setFile(ev.dataTransfer.files[0]); });
+input.addEventListener("change", () => input.files.length && setFile(input.files[0]));
+function setFile(f) { file = f; $("fname").textContent = f.name + "  (" + (f.size/1048576).toFixed(1) + " MB)"; $("scan").disabled = false; }
+
+$("sens").addEventListener("input", e => { const n = SENS[e.target.value]; $("sensName").textContent = n[0].toUpperCase() + n.slice(1); });
+
+$("scan").addEventListener("click", async () => {
+  if (!file) return;
+  $("scan").disabled = true;
+  $("results").classList.add("hidden");
+  setStatus("Uploading…", 0);
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("sensitivity", SENS[$("sens").value]);
+  try {
+    const r = await fetch("/api/scan", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || "Upload failed");
+    poll(j.run_id);
+  } catch (e) { setStatus("Error: " + e.message); $("scan").disabled = false; }
+});
+
+function setStatus(text, p) {
+  $("status").innerHTML = "";
+  const t = document.createElement("div"); t.textContent = text; $("status").appendChild(t);
+  if (p !== undefined) { const b = document.createElement("div"); b.className = "bar"; b.innerHTML = `<div style="width:${Math.round(p*100)}%"></div>`; $("status").appendChild(b); }
+}
+
+async function poll(id) {
+  const r = await fetch("/api/status/" + id); const s = await r.json();
+  if (s.status === "done") { render(s); $("scan").disabled = false; return; }
+  if (s.status === "error") { setStatus("Error: " + s.error); $("scan").disabled = false; return; }
+  setStatus(s.stage + "  ·  " + Math.round(s.progress*100) + "%", s.progress);
+  setTimeout(() => poll(id), 600);
+}
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+function render(s) {
+  const out = `output/${s.run_id}/`;
+  setStatus(`Run ${s.run_id} · ${s.frame_count} frames @ ${s.fps} fps · files saved in ${out}`);
+  $("results").classList.remove("hidden");
+
+  const fr = $("frames"); fr.innerHTML = "";
+  $("imgCount").textContent = `(${s.frames.length})`;
+  if (!s.frames.length) fr.appendChild(el("div", "empty", "No frames flagged."));
+  for (const f of s.frames) {
+    const c = el("div", "card");
+    const img = el("img"); img.loading = "lazy"; img.src = f.thumb; img.alt = f.timestamp;
+    const cap = `${f.timestamp} · frame ${f.frame} · ${f.flash_frames} frame${f.flash_frames>1?"s":""} / ${f.flash_ms} ms`;
+    img.onclick = () => openLB(f.image, cap);
+    const m = el("div", "meta");
+    m.appendChild(el("div", "ts", f.timestamp));
+    m.appendChild(el("div", "sub", `frame ${f.frame}`));
+    m.appendChild(el("div", "sub", `${f.flash_frames} frame${f.flash_frames>1?"s":""} / ${f.flash_ms} ms`));
+    c.append(img, m); fr.appendChild(c);
+  }
+
+  const a = s.audio || {}, al = $("audio"), fa = $("fullAudio");
+  al.innerHTML = ""; fa.innerHTML = "";
+  const evs = a.events || [];
+  $("audCount").textContent = `(${evs.length})`;
+  if (!a.present) { al.appendChild(el("div", "empty", "No audio track in this file.")); return; }
+  const full = el("div", "full");
+  full.appendChild(el("div", "lbl", "Full extracted track"));
+  full.appendChild(audioEl(a.full));
+  full.appendChild(el("div", "lbl", "Background stem — " + a.stem_mode));
+  full.appendChild(audioEl(a.stem));
+  fa.appendChild(full);
+  if (!evs.length) al.appendChild(el("div", "empty", "No audio moments flagged."));
+  for (const e of evs) {
+    const it = el("div", "aitem");
+    const row = el("div", "row");
+    row.appendChild(el("b", "", `${e.timestamp} → ${e.end_timestamp}`));
+    row.appendChild(el("span", "sub", `(${e.duration_ms} ms)`));
+    e.types.forEach(t => row.appendChild(el("span", "tag", t)));
+    it.appendChild(row);
+    it.appendChild(el("div", "lbl", "Original"));  it.appendChild(audioEl(e.clip));
+    it.appendChild(el("div", "lbl", "Background stem")); it.appendChild(audioEl(e.stem_clip));
+    const sp = el("img"); sp.loading = "lazy"; sp.src = e.spectrogram; sp.alt = "spectrogram " + e.timestamp;
+    sp.onclick = () => openLB(e.spectrogram, `${e.timestamp} → ${e.end_timestamp}`);
+    it.appendChild(sp);
+    al.appendChild(it);
+  }
+}
+
+function audioEl(src) { const a = el("audio"); a.controls = true; a.preload = "none"; a.src = src; return a; }
+
+const lb = $("lightbox");
+function openLB(src, cap) { lb.querySelector("img").src = src; lb.querySelector(".cap").textContent = cap; lb.classList.add("on"); }
+lb.onclick = () => lb.classList.remove("on");
+document.addEventListener("keydown", e => e.key === "Escape" && lb.classList.remove("on"));
+</script>
+</body>
+</html>
