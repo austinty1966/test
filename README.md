@@ -1,5 +1,7 @@
 # Flash & Audio Extractor
 
+**Phone version:** `mobile/flash-finder.html` is a single-page version that runs entirely in the browser (iPhone, Android or desktop) with no install and no server. The video never leaves the device. It uses the same detection rules and thresholds as the Python app below.
+
 A local web app that scans a video for brief visual flashes and short or unusual audio moments. It shows only the extracted frames, the audio clips, spectrograms and exact timestamps.
 
 ## Run
